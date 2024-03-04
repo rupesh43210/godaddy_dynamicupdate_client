@@ -1,0 +1,122 @@
+import tkinter as tk
+from tkinter import messagebox, filedialog, simpledialog
+import configparser
+from pathlib import Path
+import requests
+import threading
+from datetime import datetime
+import pytz
+
+class SettingsWindow:
+    def __init__(self, master):
+        self.window = tk.Toplevel(master)
+        self.window.title("Settings")
+        self.window.geometry("500x500")
+
+        self.config = configparser.ConfigParser()
+        self.config_file_path = tk.StringVar(value='config.ini')  # Default config file path
+        self.log_file_path = tk.StringVar(value='ip_change_log.txt')  # Default log file path
+
+        self.load_existing_settings()
+
+        # GoDaddy API Key and Secret
+        tk.Label(self.window, text="GoDaddy API Key:").pack()
+        self.api_key_entry = tk.Entry(self.window)
+        self.api_key_entry.pack()
+        self.api_key_entry.insert(0, self.config.get('GODADDY', 'api_key', fallback=''))
+
+        tk.Label(self.window, text="GoDaddy API Secret:").pack()
+        self.api_secret_entry = tk.Entry(self.window)
+        self.api_secret_entry.pack()
+        self.api_secret_entry.insert(0, self.config.get('GODADDY', 'api_secret', fallback=''))
+
+        # Config and Log File Paths
+        tk.Label(self.window, text="Config File Path:").pack()
+        config_path_entry = tk.Entry(self.window, textvariable=self.config_file_path, state='readonly')
+        config_path_entry.pack()
+        tk.Button(self.window, text="Browse", command=self.select_config_path).pack()
+
+        tk.Label(self.window, text="Log File Path:").pack()
+        log_path_entry = tk.Entry(self.window, textvariable=self.log_file_path, state='readonly')
+        log_path_entry.pack()
+        tk.Button(self.window, text="Browse", command=self.select_log_path).pack()
+
+        # Records management
+        self.records_frame = tk.LabelFrame(self.window, text="DNS Records")
+        self.records_frame.pack(fill="both", expand="yes", padx=10, pady=5)
+
+        self.records = []
+        self.load_records()
+
+        tk.Button(self.window, text="Add Record", command=self.add_record_field).pack()
+
+        # Save Button
+        tk.Button(self.window, text="Save Settings", command=self.save_settings).pack()
+
+    def select_config_path(self):
+        path = filedialog.asksaveasfilename(defaultextension=".ini", filetypes=[("INI files", "*.ini")])
+        if path:
+            self.config_file_path.set(path)
+
+    def select_log_path(self):
+        path = filedialog.asksaveasfilename(defaultextension=".txt", filetypes=[("Text files", "*.txt")])
+        if path:
+            self.log_file_path.set(path)
+
+    def load_existing_settings(self):
+        if Path(self.config_file_path.get()).exists():
+            self.config.read(self.config_file_path.get())
+
+    def add_record_field(self, domain="", record_type=""):
+        frame = tk.Frame(self.records_frame)
+        frame.pack(fill="x", padx=5, pady=5)
+
+        domain_entry = tk.Entry(frame)
+        domain_entry.insert(0, domain)
+        domain_entry.pack(side="left", fill="x", expand=True)
+
+        type_entry = tk.Entry(frame)
+        type_entry.insert(0, record_type)
+        type_entry.pack(side="left", fill="x", expand=True)
+
+        self.records.append((domain_entry, type_entry))
+
+    def load_records(self):
+        if 'RECORDS' in self.config:
+            for domain, record_type in self.config['RECORDS'].items():
+                self.add_record_field(domain, record_type)
+        else:
+            self.add_record_field()  # Add a blank set of fields if no records exist
+
+    def save_settings(self):
+        self.config['GODADDY'] = {
+            'api_key': self.api_key_entry.get(),
+            'api_secret': self.api_secret_entry.get(),
+        }
+
+        self.config['RECORDS'] = {}
+        for domain_entry, type_entry in self.records:
+            if domain_entry.get() and type_entry.get():  # Ensure the fields are not empty
+                self.config['RECORDS'][domain_entry.get()] = type_entry.get()
+
+        with open(self.config_file_path.get(), 'w') as configfile:
+            self.config.write(configfile)
+
+        messagebox.showinfo("Settings Saved", "Your settings have been saved successfully.")
+        self.window.destroy()
+
+class App:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("App Main Screen")
+        self.root.geometry("400x300")
+
+        tk.Button(root, text="Settings", command=self.open_settings).pack(anchor='ne')
+
+    def open_settings(self):
+        SettingsWindow(self.root)
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = App(root)
+    root.mainloop()
